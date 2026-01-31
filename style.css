@@ -10,6 +10,10 @@
     --glass-border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+* {
+    box-sizing: border-box;
+}
+
 body {
     background-color: var(--bg-color);
     color: var(--text-primary);
@@ -668,7 +672,7 @@ body.no-scroll {
 
     main {
         padding: 1rem;
-        width: 100%;
+       
     }
 
     /* Grid Adjustments */
