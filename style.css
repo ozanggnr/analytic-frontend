@@ -562,9 +562,15 @@ aside {
     color: var(--text-primary);
 }
 
-margin: 0.5rem 0 0;
-font-size: 0.8rem;
-color: var(--text-secondary);
+.export-info p {
+    margin: 0.5rem 0 0;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+/* Scroll Lock */
+body.no-scroll {
+    overflow: hidden;
 }
 
 /* Default state for mobile-only elements */

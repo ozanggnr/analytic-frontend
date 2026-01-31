@@ -437,6 +437,7 @@ async function triggerExport(period) {
 function toggleSidebar() {
     const sidebar = document.getElementById('sidebar');
     sidebar.classList.toggle('sidebar-open');
+    document.body.classList.toggle('no-scroll');
 }
 
 init();
