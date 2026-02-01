@@ -5,7 +5,7 @@ let allStocks = [];
 async function init() {
     const loader = document.getElementById('loader');
     loader.classList.remove('hidden');
-    loader.innerHTML = '<div class="loader-spinner"></div><p>Loading 100 stocks... (~90 sec)</p>';
+    loader.innerHTML = '<div class="loader-spinner"></div><p>Loading stocks... (15 in temp mode - see IMMEDIATE_FIX.md)</p>';
 
     // Check cache first  
     const cachedData = sessionStorage.getItem('wolfee_market_data');
@@ -27,7 +27,7 @@ async function init() {
     try {
         // Stage 1: Quick batch (100 stocks with multi-API fallback)
         await fetchQuickBatch();
-        loader.innerHTML = '<div class="loader-spinner"></div><p>✓ Loaded 100 stocks! Loading rest in background...</p>';
+        loader.innerHTML = '<div class="loader-spinner"></div><p>✓ Loaded! Add Finnhub API key for 100 stocks (see IMMEDIATE_FIX.md)</p>';
         setTimeout(() => loader.classList.add('hidden'), 2000);
 
         // Stage 2: Load rest in background (doesn't block UI)
