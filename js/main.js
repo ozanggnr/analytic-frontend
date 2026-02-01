@@ -5,7 +5,7 @@ let allStocks = [];
 async function init() {
     const loader = document.getElementById('loader');
     loader.classList.remove('hidden');
-    loader.innerHTML = '<div class="loader-spinner"></div><p>Loading market data... (30-60 seconds on first load)</p>';
+    loader.innerHTML = '<div class="loader-spinner"></div><p>Loading market data... (first load may take 2-3 minutes)</p>';
 
     // Check cache first  
     const cachedData = sessionStorage.getItem('wolfee_market_data');
@@ -31,7 +31,7 @@ async function init() {
     } catch (error) {
         console.error('Init error:', error);
         document.getElementById('stock-grid').innerHTML =
-            '<p style="color: red; grid-column: 1/-1;">Failed to load market data. Please refresh.</p>';
+            '<p style="color: red; grid-column: 1/-1;">Failed to load market data. Please refresh or check if Railway backend is running.</p>';
     } finally {
         loader.classList.add('hidden');
     }
@@ -39,12 +39,17 @@ async function init() {
 
 async function fetchAndCache() {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 60000); // 60s timeout
+    const timeout = setTimeout(() => controller.abort(), 180000); // 3 minute timeout
 
     try {
         const response = await fetch(`${API_URL}/api/market-data`, {
             signal: controller.signal
         });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
         const data = await response.json();
 
         // Save to Cache with timestamp
@@ -52,6 +57,9 @@ async function fetchAndCache() {
         sessionStorage.setItem('wolfee_cache_time', Date.now().toString());
 
         processData(data);
+    } catch (error) {
+        console.error("Fetch error:", error);
+        throw error;
     } finally {
         clearTimeout(timeout);
     }
