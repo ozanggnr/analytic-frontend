@@ -5,7 +5,7 @@ let allStocks = [];
 async function init() {
     const loader = document.getElementById('loader');
     loader.classList.remove('hidden');
-    loader.innerHTML = '<div class="loader-spinner"></div><p>Loading 100 stocks... (~60 sec)</p>';
+    loader.innerHTML = '<div class="loader-spinner"></div><p>Loading 100 stocks... (~90 sec)</p>';
 
     // Check cache first  
     const cachedData = sessionStorage.getItem('wolfee_market_data');
@@ -25,7 +25,7 @@ async function init() {
 
     // Two-stage loading
     try {
-        // Stage 1: Quick batch (100 stocks)
+        // Stage 1: Quick batch (100 stocks with multi-API fallback)
         await fetchQuickBatch();
         loader.innerHTML = '<div class="loader-spinner"></div><p>✓ Loaded 100 stocks! Loading rest in background...</p>';
         setTimeout(() => loader.classList.add('hidden'), 2000);
