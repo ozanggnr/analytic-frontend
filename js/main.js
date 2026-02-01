@@ -5,7 +5,7 @@ let allStocks = [];
 async function init() {
     const loader = document.getElementById('loader');
     loader.classList.remove('hidden');
-    loader.innerHTML = '<div class="loader-spinner"></div><p>Loading 135 stocks (100TR + 35 Global)... ~2 min</p>';
+    loader.innerHTML = '<div class="loader-spinner"></div><p>Loading market data...</p>';
 
     // Check cache first  
     const cachedData = sessionStorage.getItem('wolfee_market_data');
@@ -27,8 +27,8 @@ async function init() {
     try {
         // Stage 1: Quick batch (100 stocks with multi-API fallback)
         await fetchQuickBatch();
-        loader.innerHTML = '<div class="loader-spinner"></div><p>✓ 135 stocks loaded! Background loading...</p>';
-        setTimeout(() => loader.classList.add('hidden'), 2000);
+        loader.innerHTML = '<div class="loader-spinner"></div><p>✓ Data loaded!</p>';
+        setTimeout(() => loader.classList.add('hidden'), 1500);
 
         // Stage 2: Load rest in background (doesn't block UI)
         fetchFullBatchInBackground();
