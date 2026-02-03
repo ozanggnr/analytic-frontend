@@ -5,7 +5,13 @@ async function loadChart(symbol, range) {
     currentSymbol = symbol;
     // Reset buttons
     document.querySelectorAll('.chart-controls button').forEach(b => b.classList.remove('active'));
-    const btnText = range === '1d' ? '1 Day' : range === '1mo' ? '1 Month' : '1 Year';
+    const btnTextMap = {
+        '1d': '1 Day',
+        '1mo': '1 Month',
+        '1y': '1 Year',
+        '5y': '5 Years'
+    };
+    const btnText = btnTextMap[range] || '1 Year';
     const btn = Array.from(document.querySelectorAll('.chart-controls button')).find(b => b.textContent.includes(btnText));
     if (btn) btn.classList.add('active');
 
@@ -77,3 +83,12 @@ function renderChart(candleData, range) {
 
 // Expose globally
 window.loadChart = loadChart;
+
+// Add updateChart function for time period buttons
+window.updateChart = function (period) {
+    if (!currentSymbol) {
+        console.error('No symbol selected');
+        return;
+    }
+    loadChart(currentSymbol, period);
+};

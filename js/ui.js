@@ -37,15 +37,15 @@ function createStockCardElement(stock) {
         <div class="stats-grid">
             <div class="stat-item">
                 <span>MA(20)</span>
-                <span>${stock.ma_20.toFixed(2)}</span>
+                <span>${stock.ma_20 ? stock.ma_20.toFixed(2) : '-'}</span>
             </div>
             <div class="stat-item">
                 <span>RSI</span>
-                <span style="color: ${getRsiColor(stock.rsi)}">${stock.rsi}</span>
+                <span style="color: ${getRsiColor(stock.rsi)}">${stock.rsi || '-'}</span>
             </div>
             <div class="stat-item">
                 <span>Vol</span>
-                <span>${stock.volatility}%</span>
+                <span>${stock.volatility || 'N/A'}</span>
             </div>
         </div>
         
