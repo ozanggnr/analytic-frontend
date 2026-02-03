@@ -209,43 +209,8 @@ def analyze_stock(symbol: str, is_commodity=False, detailed=False):
             # Yahoo failed, try backup APIs
             pass
         
-        # Yahoo failed or returned empty - try backup APIs
-        print(f"⚠️ Yahoo failed for {symbol}, trying backup APIs...")
-        from backup_data import fetch_with_fallback
-        backup = fetch_with_fallback(symbol)
-        
-        if backup:
-            # Generate reason based on backup data
-            change_pct = backup["change_pct"]
-            reason = f"Data from {backup['source']}"
-            if change_pct > 5:
-                reason = "Strong momentum with +" + str(round(change_pct, 1)) + "% gain"
-            elif change_pct > 2:
-                reason = "Positive trend with +" + str(round(change_pct, 1)) + "% gain"
-            elif change_pct > 0:
-                reason = "Slight upward movement"
-            
-            return {
-                "symbol": symbol,
-                "name": symbol.replace('.IS', ''),
-                "price": backup["price"],
-                "change_pct": backup["change_pct"],
-                "currency": "TRY" if symbol.endswith('.IS') else "USD",
-                "market_cap": 0,
-                "volume": backup.get("volume", 0),
-                "rsi": 50,
-                "ma_20": None,
-                "prediction": reason,
-                "reason": reason,
-                "buy_signals": [],
-                "is_favorable": backup["change_pct"] > 0,
-                "volatility": "MEDIUM"
-            }
-        else:
-            # All APIs failed - return None (stock won't be displayed)
-            return None
-            # If fallback also failed, return None
-            return None
+        # Yahoo failed - return None (no backup APIs available)
+        return None
         
         # If we got valid dataframe from Yahoo, continue with normal analysis
         if df is None or df.empty:
