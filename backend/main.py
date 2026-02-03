@@ -3,7 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 import yfinance as yf
 from analysis import analyze_stock, get_market_opportunities, get_bulk_analysis, BIST_SYMBOLS, GLOBAL_SYMBOLS, COMMODITIES_SYMBOLS
 from ai_service import get_market_insight
-from api_router import get_router
 
 app = FastAPI(title="Wolfee Analytics")
 
