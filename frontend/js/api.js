@@ -1,12 +1,39 @@
 
+
 async function fetchAndCache() {
-    const response = await fetch(`${API_URL}/stocks`);
-    const data = await response.json();
+    try {
+        const response = await fetch(`${API_URL}/stocks`);
+        const data = await response.json();
 
-    // Save to Cache
-    sessionStorage.setItem('wolfee_market_data', JSON.stringify(data));
+        // If backend returned 0 stocks, use client-side Yahoo Finance
+        if (!data.stocks || data.stocks.length === 0) {
+            console.warn('⚠️ Backend returned 0 stocks, fetching from browser...');
+            const browserData = await fetchAllStocksFromBrowser();
+            const fallbackData = {
+                stocks: browserData,
+                timestamp: new Date().toISOString(),
+                source: 'browser'
+            };
+            sessionStorage.setItem('wolfee_market_data', JSON.stringify(fallbackData));
+            processData(fallbackData);
+            return;
+        }
 
-    processData(data);
+        // Backend has data, use it
+        sessionStorage.setItem('wolfee_market_data', JSON.stringify(data));
+        processData(data);
+    } catch (error) {
+        console.error('Backend fetch failed, using client-side fallback:', error);
+        // Backend is down, use client-side
+        const browserData = await fetchAllStocksFromBrowser();
+        const fallbackData = {
+            stocks: browserData,
+            timestamp: new Date().toISOString(),
+            source: 'browser'
+        };
+        sessionStorage.setItem('wolfee_market_data', JSON.stringify(fallbackData));
+        processData(fallbackData);
+    }
 }
 
 async function fetchStockData(symbol) {
