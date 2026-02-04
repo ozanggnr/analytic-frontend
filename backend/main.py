@@ -78,7 +78,7 @@ def update_cache_background():
                     results.append(stock_data)
                 
                 # Small delay to be nice to CPUs
-                time.sleep(0.5) 
+                time.sleep(0.1) 
                 
             except Exception as e:
                 print(f"Background fetch error {symbol}: {e}")
