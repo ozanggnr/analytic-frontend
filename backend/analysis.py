@@ -157,59 +157,71 @@ def predict_best_buy(buy_type, volatility, rsi):
 
 def analyze_stock(symbol: str, is_commodity=False, detailed=False):
     """
-    Try Yahoo first (works locally), fall back to backup APIs if Yahoo fails (Render).
-    Resilient approach: show only stocks that actually load successfully.
+    Fetch stock data using multi-API router (Finnhub, Alpha Vantage, Polygon)
+    Replaces Yahoo Finance with reliable alternatives
     """
+    from api_router import get_router
+    
     try:
-        # Try Yahoo Finance first (works on local, may fail on cloud)
-        try:
-            ticker = yf.Ticker(symbol)
-            df = ticker.history(period="30d", timeout=3)  # Get more data for MA(20)
-            
-            if not df.empty and len(df) > 0:
-                latest = df.iloc[-1]
-                prev =  df.iloc[-2] if len(df) > 1 else latest
-                
-                current_price = float(latest['Close'])
-                prev_close = float(prev['Close'])
-                change_pct = ((current_price - prev_close) / prev_close * 100) if prev_close else 0
-                
-                # Calculate MA(20) if we have enough data
-                ma_20 = None
-                if len(df) >= 20:
-                    ma_20 = float(round(df['Close'].tail(20).mean(), 2))
-                
-                # Generate reason based on performance
-                reason = "Data from Yahoo Finance"
-                if change_pct > 5:
-                    reason = "Strong momentum with +" + str(round(change_pct, 1)) + "% gain"
-                elif change_pct > 2:
-                    reason = "Positive trend with +" + str(round(change_pct, 1)) + "% gain"
-                elif change_pct > 0:
-                    reason = "Slight upward movement"
-                
-                # Yahoo worked!
-                return {
-                    "symbol": str(symbol),
-                    "name": str(symbol).replace('.IS', ''),
-                    "price": float(round(current_price, 2)),
-                    "change_pct": float(round(change_pct, 2)),
-                    "currency": "TRY" if symbol.endswith('.IS') else "USD",
-                    "market_cap": 0,
-                    "volume": int(latest.get('Volume', 0)),
-                    "rsi": 50,
-                    "ma_20": ma_20,
-                    "prediction": reason,
-                    "reason": reason,
-                    "buy_signals": [],
-                    "is_favorable": bool(change_pct > 0),
-                    "volatility": "MEDIUM"
-                }
-        except Exception as yahoo_err:
-            # Yahoo failed, try backup APIs
-            pass
+        # Get API router
+        router = get_router()
         
-        # Yahoo failed - return None (no backup APIs available)
+        # Fetch from alternative APIs
+        api_data = router.fetch_stock(symbol)
+        
+        if not api_data:
+            print(f"No data available for {symbol}")
+            return None
+        
+        # Build response using API data
+        current_price = api_data.get('price', 0)
+        change_pct = api_data.get('change_pct', 0)
+        
+        # Determine currency
+        currency = "TRY" if symbol.endswith('.IS') else "USD"
+        
+        # Generate prediction based on change
+        if change_pct > 5:
+            prediction = f"Strong momentum with +{round(change_pct, 1)}% gain"
+        elif change_pct > 2:
+            prediction = f"Positive trend with +{round(change_pct, 1)}% gain"
+        elif change_pct > 0:
+            prediction = "Slight upward movement"
+        elif change_pct < -5:
+            prediction = f"Strong decline with {round(change_pct, 1)}% loss"
+        elif change_pct < -2:
+            prediction = f"Downward trend with {round(change_pct, 1)}% loss"
+        else:
+            prediction = "Stable price action"
+        
+        # Estimate RSI from price change (simplified)
+        rsi = 50 + (change_pct * 2)  # Rough estimate
+        rsi = max(0, min(100, rsi))  # Clamp between 0-100
+        
+        # Estimate MA_20 (simplified - slightly above/below current price)
+        ma_20 = current_price * (1 - change_pct / 200)  # Approximate
+        
+        result = {
+            "symbol": symbol,
+            "name": symbol.replace('.IS', ''),
+            "price": current_price,
+            "change_pct": change_pct,
+            "currency": currency,
+            "market_cap": 0,  # Not available from quote APIs
+            "volume": api_data.get('volume', 0),
+            "rsi": round(rsi, 2),
+            "ma_20": round(ma_20, 2),
+            "prediction": prediction,
+            "reason": prediction,
+            "buy_signals": [],
+            "is_favorable": change_pct > 0,
+            "volatility": "HIGH" if abs(change_pct) > 5 else "MEDIUM" if abs(change_pct) > 2 else "LOW"
+        }
+        
+        return result
+        
+    except Exception as e:
+        print(f"Error analyzing {symbol}: {e}")
         return None
         
         # If we got valid dataframe from Yahoo, continue with normal analysis
