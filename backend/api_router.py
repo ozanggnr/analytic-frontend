@@ -178,20 +178,20 @@ class StockAPIRouter:
         Note: Scraping can be fragile and may break with website changes.
         """
         try:
-            # Google Finance uses a slightly different symbol format for some international stocks
-            # e.g., "BIST:THYAO" for Turkish Airlines on Istanbul Stock Exchange
-            # For US stocks, it's usually just the ticker.
+            # Google Finance text scraping is fragile.
+            # We ONLY use it for Turkish stocks (.IS) because Finnhub/Poly often lack them or delay.
+            if not symbol.endswith('.IS'):
+                return None
+
+            # Map .IS to BIST:
+            gf_symbol = f"BIST:{symbol.replace('.IS', '')}"
             
-            # Attempt to determine the correct Google Finance symbol
-            gf_symbol = symbol
-            if symbol.endswith('.IS'): # Example for Istanbul Stock Exchange
-                gf_symbol = f"BIST:{symbol.replace('.IS', '')}"
-            
-            url = f"https://www.google.com/finance/quote/{gf_symbol}"
+            # Simple User-Agent to look like browser
             headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
             }
             
+            url = f"https://www.google.com/finance/quote/{gf_symbol}"
             response = requests.get(url, headers=headers, timeout=10)
             response.raise_for_status()
             
