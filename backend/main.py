@@ -297,7 +297,13 @@ def export_portfolio(symbols: str, period: str):
         ws.title = f"Portfolio {period.capitalize()}"
         
         # Headers
-        headers = ["Symbol", "Name", "Price", "Change %", "RSI", "Volume", "Prediction"]
+        # Align with Market Export Columns
+        headers = [
+            "Symbol", "Name", "Report Period", "Analysis Date", "Trend",
+            "Current Price", "Start Price", "Change %", "Change Amt",
+            "Period High", "High Date", "Period Low", "Low Date",
+            "RSI (14)", "RSI Status", "Volatility %", "MA(20)", "Volume (Period)"
+        ]
         ws.append(headers)
         
         # Style header
@@ -307,15 +313,35 @@ def export_portfolio(symbols: str, period: str):
             cell.alignment = Alignment(horizontal="center")
         
         # Add data
+        today = datetime.now().strftime("%Y-%m-%d")
         for stock in results:
+            price = stock.get('price', 0)
+            change_p = stock.get('change_pct', 0)
+            change_amt = price * (change_p / 100) if price else 0
+            start_price = stock.get('previous_close') or (price - change_amt)
+            
+            rsi = stock.get('rsi', 0)
+            rsi_status = "Oversold" if rsi < 30 else "Overbought" if rsi > 70 else "Neutral"
+            
             ws.append([
                 stock.get('symbol', ''),
                 stock.get('name', ''),
-                stock.get('price', 0),
-                stock.get('change_pct', 0),
-                stock.get('rsi', 0),
-                stock.get('volume', 0),
-                stock.get('prediction', '')
+                "Session Snapshot", # Report Period
+                today, # Analysis Date
+                stock.get('prediction', ''), # Trend
+                price, # Current Price
+                start_price, # Start Price (Prev Close)
+                change_p, # Change %
+                change_amt, # Change Amt
+                stock.get('day_high', 0), # Period High
+                today, # High Date
+                stock.get('day_low', 0), # Period Low
+                today, # Low Date
+                rsi, # RSI
+                rsi_status, # RSI Status
+                stock.get('volatility', 'MEDIUM'), # Volatility
+                stock.get('ma_20', 0), # MA(20)
+                stock.get('volume', 0) # Volume
             ])
         
         # Auto-adjust column widths

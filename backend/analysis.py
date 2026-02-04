@@ -203,12 +203,18 @@ def analyze_stock(symbol: str, is_commodity=False, detailed=False):
         
         result = {
             "symbol": symbol,
-            "name": symbol.replace('.IS', ''),
+            "name": api_data.get('name', symbol.replace('.IS', '')), # Use real name if available
             "price": current_price,
             "change_pct": change_pct,
             "currency": currency,
-            "market_cap": 0,  # Not available from quote APIs
+            "market_cap": 0,
             "volume": api_data.get('volume', 0),
+            "day_high": api_data.get('day_high', 0),
+            "day_low": api_data.get('day_low', 0),
+            "open": api_data.get('open', 0),
+            "previous_close": api_data.get('previous_close', 0),
+            "bid": api_data.get('bid', 0),
+            "ask": api_data.get('ask', 0),
             "rsi": round(rsi, 2),
             "ma_20": round(ma_20, 2),
             "prediction": prediction,
