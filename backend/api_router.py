@@ -46,6 +46,7 @@ class StockAPIRouter:
     def fetch_from_finnhub(self, symbol: str) -> Optional[Dict]:
         """
         Fetch stock data from Finnhub (60 calls/min free tier)
+        With Strict 429 Error Handling
         """
         if not self.finnhub_key:
             return None
@@ -54,23 +55,18 @@ class StockAPIRouter:
             self._rate_limit('finnhub')
             
             # Remove .IS suffix for Turkish stocks - Finnhub uses different format
-            # But we skip Finnhub for .IS usually unless BIST scraper fails? 
-            # BIST scraper logic is separate now.
             clean_symbol = symbol.replace('.IS', '.IST') 
             
-            # Get quote
             url = f"https://finnhub.io/api/v1/quote"
             params = {'symbol': clean_symbol, 'token': self.finnhub_key}
             
-            response = requests.get(url, params=params, timeout=10) # 10s timeout
+            response = requests.get(url, params=params, timeout=10)
             response.raise_for_status()
             data = response.json()
             
-            if data.get('c') == 0:  # No data
+            if data.get('c') == 0:
                 return None
-
                 
-            # Calculate change percentage
             current_price = data.get('c', 0)
             prev_close = data.get('pc', current_price)
             change_pct = ((current_price - prev_close) / prev_close * 100) if prev_close else 0
@@ -86,6 +82,11 @@ class StockAPIRouter:
                 'timestamp': data.get('t', int(time.time()))
             }
             
+        except requests.exceptions.HTTPError as e:
+            if self._handle_api_error(e, 'finnhub'): # Calls sleep(60) if 429
+                return None
+            print(f"Finnhub HTTP error for {symbol}: {e}")
+            return None
         except Exception as e:
             print(f"Finnhub error for {symbol}: {e}")
             return None
@@ -141,19 +142,15 @@ class StockAPIRouter:
     def fetch_from_polygon(self, symbol: str) -> Optional[Dict]:
         """
         Fetch from Polygon.io (5 calls/min free)
-        Best for: US stocks previous day data
+        With Strict 429 Error Handling
         """
         if not self.polygon_key:
             return None
             
         try:
             self._rate_limit('polygon')
+            if symbol.endswith('.IS'): return None
             
-            # Polygon doesn't support Turkish stocks
-            if symbol.endswith('.IS'):
-                return None
-            
-            # Get previous day's data
             url = f"https://api.polygon.io/v2/aggs/ticker/{symbol}/prev"
             params = {'apiKey': self.polygon_key}
             
@@ -162,8 +159,7 @@ class StockAPIRouter:
             data = response.json()
             
             results = data.get('results', [])
-            if not results:
-                return None
+            if not results: return None
             
             quote = results[0]
             close_price = quote.get('c', 0)
@@ -179,112 +175,100 @@ class StockAPIRouter:
                 'open': open_price,
                 'volume': quote.get('v', 0)
             }
-            
+        except requests.exceptions.HTTPError as e:
+            if self._handle_api_error(e, 'polygon'): # Calls sleep(60) if 429
+                return None
+            print(f"Polygon HTTP error for {symbol}: {e}")
+            return None
         except Exception as e:
             print(f"Polygon error for {symbol}: {e}")
             return None
     
-    def fetch_google_finance(self, symbol: str) -> Optional[Dict]:
+    def fetch_scraped_data(self, symbol: str) -> Optional[Dict]:
         """
-        Scrape current price data from Google Finance.
-        Note: Scraping can be fragile and may break with website changes.
+        Primary Data Source:
+        1. yfinance library (Handles cookies/crumbs automatically)
+        2. Google Finance Scraper (Backup)
         """
+        # 1. Try yfinance library
         try:
-            # Google Finance text scraping is fragile.
-            # We ONLY use it for Turkish stocks (.IS) because Finnhub/Poly often lack them or delay.
-            if not symbol.endswith('.IS'):
-                return None
+            import yfinance as yf
+            # yfinance handles symbols like 'AAPL', 'AKBNK.IS'
+            ticker = yf.Ticker(symbol)
+            # fast_info is faster than history()
+            info = ticker.fast_info
+            
+            # Check valid price
+            price = info.last_price
+            prev_close = info.previous_close
+            
+            if price is not None and price > 0:
+                change_pct = ((price - prev_close) / prev_close) * 100 if prev_close else 0
+                
+                return {
+                    "symbol": symbol,
+                    "price": round(price, 2),
+                    "change_pct": round(change_pct, 2),
+                    "volume": 0 # Optimization
+                }
+        except Exception:
+            pass # Try backup
 
-            # Map .IS to BIST:
+        # 2. Backup: Google Finance (Global + Turkish)
+        gf_symbol = symbol
+        if symbol.endswith('.IS'):
             gf_symbol = f"BIST:{symbol.replace('.IS', '')}"
-            
-            # Simple User-Agent to look like browser
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
-            }
-            
+        elif symbol in ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'NVDA', 'META', 'NFLX', 'BRK.B']:
+            gf_symbol = f"NASDAQ:{symbol}"
+        
+        try:
             url = f"https://www.google.com/finance/quote/{gf_symbol}"
-            response = requests.get(url, headers=headers, timeout=10)
-            response.raise_for_status()
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
             
-            soup = BeautifulSoup(response.text, 'html.parser')
-            
-            # Find the current price
-            price_tag = soup.find('div', class_='YMlKec fxKbKc')
-            if not price_tag:
-                # Fallback for different structure or if not found
-                price_tag = soup.find('div', class_='YMlKec')
-            
-            if not price_tag:
-                return None
-            
-            price_str = price_tag.text.strip().replace(',', '') # Remove comma for thousands
-            current_price = float(price_str)
-            
-            # Find change and change percentage
-            change_tag = soup.find('div', class_='JwB6zf')
-            if change_tag:
-                change_text = change_tag.text.strip()
-                parts = change_text.split('(')
-                if len(parts) == 2:
-                    change_value_str = parts[0].strip().replace(',', '')
-                    change_pct_str = parts[1].replace(')', '').replace('%', '').strip()
+            response = requests.get(url, headers=headers, timeout=5)
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.text, 'html.parser')
+                price_div = soup.find('div', class_='YMlKec fxKbKc')
+                if not price_div: price_div = soup.find('div', class_='YMlKec')
+                
+                if price_div:
+                    p_text = price_div.get_text().replace('₺', '').replace('$', '').replace(',', '').strip()
+                    price = float(p_text)
                     
-                    change_value = float(change_value_str)
-                    change_pct = float(change_pct_str)
-                    
-                    # Determine previous close from current price and change
-                    prev_close = current_price - change_value
-                    
-                    return {
-                        'symbol': symbol,
-                        'price': round(current_price, 2),
-                        'change_pct': round(change_pct, 2),
-                        'prev_close': round(prev_close, 2),
-                        'timestamp': int(time.time()) # Current time as timestamp
-                        # Google Finance scraping typically doesn't provide high/low/open directly on the main quote page
-                    }
+                    # Sanity check for BIST index confusion (avoid 49k if not index)
+                    # If it's TR stock and price > 15000, probably index. (Except occasional outliers?)
+                    if not (symbol.endswith('.IS') and price > 15000):
+                        return {
+                            "symbol": symbol,
+                            "price": price,
+                            "change_pct": 0.0,
+                            "volume": 0
+                        }
+        except Exception:
+            pass
             
-            # If change info not found, return just price
-            return {
-                'symbol': symbol,
-                'price': round(current_price, 2),
-                'timestamp': int(time.time())
-            }
-            
-        except requests.exceptions.RequestException as req_e:
-            print(f"Google Finance request error for {symbol}: {req_e}")
-            return None
-        except Exception as e:
-            print(f"Google Finance scraping error for {symbol}: {e}")
-            return None
+        return None
 
     def fetch_price(self, symbol: str) -> Optional[Dict]:
         """
         Fetch current price data.
-        Priority: Google Finance (Scrape) -> Finnhub -> Alpha Vantage -> Polygon
+        Priority: Scraper (yfinance/Google) -> Finnhub -> Polygon -> Alpha Vantage
         """
-        
-        # 0. Try Google Finance (Scraping) - Requested by User
-        # Note: scraping is slow but gets around API limits if careful.
-        gf_data = self.fetch_google_finance(symbol)
-        if gf_data:
-            return gf_data
+        # 1. Scraping (Unlimited, Primary)
+        data = self.fetch_scraped_data(symbol)
+        if data: return data
 
-        # 1. Try Finnhub (Fastest API)
+        # 2. Finnhub (API, 60/min)
         data = self.fetch_from_finnhub(symbol)
-        if data:
-            return data
+        if data: return data
         
-        # 2. Try Alpha Vantage (limited calls)
-        data = self.fetch_from_alpha_vantage(symbol)
-        if data:
-            return data
-        
-        # Try Polygon (US stocks only)
+        # 3. Polygon (API, 5/min)
         data = self.fetch_from_polygon(symbol)
-        if data:
-            return data
+        if data: return data
+        
+        # 4. Alpha Vantage (Backup)
+        data = self.fetch_from_alpha_vantage(symbol)
+        if data: return data
         
         return None
 
