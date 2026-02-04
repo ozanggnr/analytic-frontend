@@ -78,7 +78,12 @@ def update_cache_background():
                     results.append(stock_data)
                 
                 # Small delay to prevent API blocking (Rate Limit Protection)
-                time.sleep(0.25) 
+                time.sleep(0.25)
+                
+                # INCREMENTAL UPDATE: Update cache every 5 items so user sees progress
+                if len(results) % 5 == 0:
+                     cache["quick_data"] = results
+                     cache["last_updated"] = time.time()
                 
             except Exception as e:
                 print(f"Background fetch error {symbol}: {e}")
@@ -89,7 +94,7 @@ def update_cache_background():
              if c_data:
                  results.append(c_data)
 
-        # Update cache
+        # Final Update
         cache["quick_data"] = results
         cache["last_updated"] = time.time()
         print(f"✅ Background cache update complete. {len(results)} stocks cached.")
@@ -112,7 +117,7 @@ def get_quick_market_data(background_tasks: BackgroundTasks):
     
     # 1. Return Cache if valid (5 min TTL)
     if cache["quick_data"] and (now - cache["last_updated"]) < 300:
-        print(f"✓ Returning cached data ({len(cache['quick_data'])} stocks)")
+        # print(f"✓ Returning cached data ({len(cache['quick_data'])} stocks)")
         return {"stocks": cache["quick_data"]}
     
     # 2. Fetch Top 10 Sync (Fast boot)
@@ -151,12 +156,7 @@ def get_full_market_data():
     
     # Check cache
     now = time.time()
-    if cache["quick_data"] and (now - cache["last_updated"]) < 300:
-        print(f"Serving full batch from cache ({len(cache['quick_data'])} stocks)")
-        return {"stocks": cache["quick_data"]}
-    
-    # If no cache (first run), return whatever we have or empty list
-    # The background task should be running from the first 'quick' call
+    # Return whatever we have, even if it's partial or old
     if cache["quick_data"]:
          return {"stocks": cache["quick_data"]}
          
@@ -246,11 +246,13 @@ def get_chart_data_frontend(symbol: str, period: str):
     from api_router import get_router
     
     try:
-        # Handle Turkish stocks
-        if not symbol.endswith('.IS') and symbol not in GLOBAL_SYMBOLS and "=" not in symbol:
-            symbol += '.IS'
-            
+        # Reuse history logic if possible
         router = get_router()
+        # Clean symbol logic
+        is_global = symbol in GLOBAL_SYMBOLS or symbol.upper() in GLOBAL_SYMBOLS
+        if not symbol.endswith('.IS') and not is_global and "=" not in symbol:
+             symbol += '.IS'
+             
         data = router.fetch_history(symbol, period)
         
         if not data:
@@ -258,9 +260,12 @@ def get_chart_data_frontend(symbol: str, period: str):
             
         return data  # Already formatted in api_router matches this structure
         
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Chart error for {symbol}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        # Return 404 to prevent frontend error page - just showing 'No Data' is better
+        raise HTTPException(status_code=404, detail="Chart internal error")
 
 @app.get("/api/export/portfolio")
 def export_portfolio(symbols: str, period: str):
