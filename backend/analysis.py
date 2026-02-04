@@ -4,18 +4,23 @@ import numpy as np
 from datetime import datetime, timedelta
 
 # Top ~50 Most Liquid BIST Stocks (reduced for reliability)
+# Top ~80 Most Liquid BIST Stocks
 BIST_SYMBOLS = [
     # Major Banks (9 stocks)
     "AKBNK.IS", "GARAN.IS", "HALKB.IS", "ISCTR.IS", "YKBNK.IS", "VAKBN.IS", "TSKB.IS", "SKBNK.IS", "ALBRK.IS",
     
     # Major Holdings & Investment (10 stocks)  
     "KCHOL.IS", "SAHOL.IS", "DOHOL.IS", "EKGYO.IS", "GSDHO.IS", "BIMAS.IS", "SISE.IS", "EREGL.IS", "ARCLK.IS", "ENKAI.IS",
+    "AGHOL.IS", "TKFEN.IS", "ALARK.IS", "BERA.IS", 
     
-    # Energy & Utilities (8 stocks)
+    # Energy & Utilities (14 stocks)
     "EUPWR.IS", "SMRTG.IS", "ODAS.IS", "ASTOR.IS", "AYDEM.IS", "ZOREN.IS", "KONTR.IS", "GWIND.IS",
+    "ENJSA.IS", "AKSA.IS", "AKSEN.IS", "CANTE.IS", "CWENE.IS", "BIOEN.IS",
     
-    # Industry & Auto (8 stocks)
+    # Industry, Mining & Auto (15 stocks)
     "FROTO.IS", "TOASO.IS", "TTRAK.IS", "TMSN.IS", "KARSN.IS", "PETKM.IS", "TUPRS.IS", "VESTL.IS",
+    "DOAS.IS", "OTKAR.IS", "BRSAN.IS", "KORDS.IS", "SASA.IS", "HEKTS.IS", "GUBRF.IS",
+    "KOZAL.IS", "KOZAA.IS", "IPEKE.IS", "KRDMD.IS",
     
     # Aviation & Transport (4 stocks)
     "THYAO.IS", "PGSUS.IS", "TAVHL.IS", "CLEBI.IS",
@@ -23,64 +28,45 @@ BIST_SYMBOLS = [
     # Retail & Food (6 stocks)
     "MGROS.IS", "SOKM.IS", "AEFES.IS", "CCOLA.IS", "ULKER.IS", "MAVI.IS",
     
-    # Tech & Telecom (5 stocks)  
-    "ASELS.IS", "TCELL.IS", "TTKOM.IS", "SDTTR.IS", "VBTYZ.IS",
+    # Tech & Telecom (6 stocks)  
+    "ASELS.IS", "TCELL.IS", "TTKOM.IS", "SDTTR.IS", "VBTYZ.IS", "LOGO.IS",
+    "MIATK.IS", "REEDR.IS", "YEOTK.IS"
 ]
 
 GLOBAL_SYMBOLS = [
     # US Tech Giants & FAANG+
     "AAPL", "MSFT", "GOOGL", "GOOG", "AMZN", "NVDA", "TSLA", "META", "NFLX", "AMD", "INTC",
     "AVGO", "QCOM", "CSCO", "ORCL", "ADBE", "CRM", "NOW", "SNOW", "PANW", "CRWD", "ZS",
-    "DDOG", "NET", "MDB", "PLTR", "U", "TTD", "TWLO", "SQ", "PYPL",
+    "DDOG", "NET", "MDB", "PLTR", "U", "TTD", "TWLO", "SQ", "PYPL", "IBM", "DELL", "HPQ",
     
     # Finance & Banks
     "JPM", "V", "MA", "BAC", "WFC", "C", "GS", "MS", "BLK", "AXP", "SCHW", "USB", "PNC",
-    "TFC", "COF", "BK", "STT", "SPGI", "MCO", "ICE", "CME", "MSCI",
+    "TFC", "COF", "BK", "STT", "SPGI", "MCO", "ICE", "CME", "MSCI", "HSBC", "RY", "TD",
     
     # Consumer & Retail
     "WMT", "COST", "HD", "LOW", "TGT", "TJX",  "NKE", "LULU", "SBUX", "MCD", "YUM", "CMG",
-    "DPZ", "ROST", "ULTA", "DG", "DLTR",
+    "DPZ", "ROST", "ULTA", "DG", "DLTR", "BUD", "DEO",
     
     # Consumer Products & Brands
-    "PG", "KO", "PEP", "PM", "MO", "CL", "KMB", "EL", "CLX", "CHD",
+    "PG", "KO", "PEP", "PM", "MO", "CL", "KMB", "EL", "CLX", "CHD", "SONY", "TM", "HMC", "STLA",
     
-   # Healthcare & Pharma
+    # Healthcare & Pharma
     "JNJ", "UNH", "LLY", "ABBV", "MRK", "PFE", "TMO", "ABT", "DHR", "BMY", "AMGN", "GILD",
-    "VRTX", "REGN", "CI", "CVS", "HUM", "ELV", "HCA", "MOH",
+    "VRTX", "REGN", "CI", "CVS", "HUM", "ELV", "HCA", "MOH", "NVS", "AZN", "SNY", "GSK",
     
     # Media & Entertainment
-    "DIS", "CMCSA", "NFLX", "WBD", "FOXA", "SPOT", "RBLX", "EA", "TTWO",
+    "DIS", "CMCSA", "NFLX", "WBD", "FOXA", "SPOT", "RBLX", "EA", "TTWO", "PARA",
     
-    # Industrial & Manufacturing  
+    # Industrial & Mining  
     "BA", "CAT", "GE", "HON", "UNP", "UPS", "FDX", "LMT", "RTX", "NOC", "GD", "MMM", "EMR",
-    "ITW", "ETN", "PH", "ROK", "DOV",
+    "ITW", "ETN", "PH", "ROK", "DOV", "DE", "BHP", "RIO", "VALE", "SCCO",
     
     # Energy & Oil
     "XOM", "CVX", "COP", "SLB", "EOG", "MPC", "PSX", "VLO", "OXY", "HAL", "BKR",
-    "DVN", "FANG",
+    "DVN", "FANG", "TTE", "SHEL", "BP", "EQNR",
     
-    # Automotive
-    "TSLA", "F", "GM", "TM", "HMC", "STLA", "RIVN", "LCID",
-    
-    # Semiconductors & Hardware
-    "NVDA", "AMD", "INTC", "AVGO", "QCOM", "TXN", "ADI", "MCHP", "KLAC", "LRCX", "AMAT",
-    "MU", "NXPI", "ON", "MRVL", "SWKS",
-    
-    # E-commerce & Payments
-    "AMZN", "SHOP", "MELI", "EBAY", "ETSY", "SE", "BABA", "JD", "PDD",
-    "V", "MA", "PYPL", "COIN", "SOFI",
-    
-    # Telecom & Communication
-    "T", "VZ", "TMUS", "CHTR",
-    
-    # Real Estate & REITs
-    "PLD", "AMT", "CCI", "EQIX", "SPG", "PSA", "O", "WELL", "DLR", "VICI",
-    
-    # Utilities
-    "NEE", "DUK", "SO", "D", "AEP", "EXC", "SRE", "XEL",
-    
-    # Other Major Players
-    "BRK-B", "BRK.B", "TSM", "ASML", "NVO", "UL", "SAP", "TTE", "SHEL", "BP"
+    # Semiconductors & Hardware addition
+    "TXN", "ADI", "MCHP", "KLAC", "LRCX", "AMAT", "MU", "NXPI", "ON", "MRVL", "SWKS", "ASML", "TSM"
 ]
 
 COMMODITIES_SYMBOLS = {
