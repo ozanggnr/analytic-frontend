@@ -9,16 +9,16 @@ import requests
 from typing import Optional, Dict
 import time
 from datetime import datetime
+from bs4 import BeautifulSoup
 
 
 class StockAPIRouter:
     def __init__(self):
         # API Keys from environment
         self.finnhub_key = os.getenv('FINNHUB_API_KEY')
-        self.alpha_vantage_key = os.getenv('ALPHA_VANTAGE_API_KEY')
+        self.alphavantage_key = os.getenv('ALPHA_VANTAGE_API_KEY') # Renamed from alpha_vantage_key
         self.polygon_key = os.getenv('POLYGON_API_KEY')
-        self.alpaca_key = os.getenv('ALPACA_API_KEY')
-        self.alpaca_secret = os.getenv('ALPACA_SECRET_KEY')
+        # Alpaca keys removed as per instruction
         
         # Rate limiting (simple counter)
         self.last_call = {}
@@ -172,17 +172,99 @@ class StockAPIRouter:
             print(f"Polygon error for {symbol}: {e}")
             return None
     
-    def fetch_stock(self, symbol: str) -> Optional[Dict]:
+    def fetch_google_finance(self, symbol: str) -> Optional[Dict]:
         """
-        Fetch stock data with intelligent fallback
-        Priority: Finnhub -> Alpha Vantage -> Polygon
+        Scrape current price data from Google Finance.
+        Note: Scraping can be fragile and may break with website changes.
         """
-        # Try Finnhub first (best free tier)
+        try:
+            # Google Finance uses a slightly different symbol format for some international stocks
+            # e.g., "BIST:THYAO" for Turkish Airlines on Istanbul Stock Exchange
+            # For US stocks, it's usually just the ticker.
+            
+            # Attempt to determine the correct Google Finance symbol
+            gf_symbol = symbol
+            if symbol.endswith('.IS'): # Example for Istanbul Stock Exchange
+                gf_symbol = f"BIST:{symbol.replace('.IS', '')}"
+            
+            url = f"https://www.google.com/finance/quote/{gf_symbol}"
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+            
+            response = requests.get(url, headers=headers, timeout=10)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # Find the current price
+            price_tag = soup.find('div', class_='YMlKec fxKbKc')
+            if not price_tag:
+                # Fallback for different structure or if not found
+                price_tag = soup.find('div', class_='YMlKec')
+            
+            if not price_tag:
+                return None
+            
+            price_str = price_tag.text.strip().replace(',', '') # Remove comma for thousands
+            current_price = float(price_str)
+            
+            # Find change and change percentage
+            change_tag = soup.find('div', class_='JwB6zf')
+            if change_tag:
+                change_text = change_tag.text.strip()
+                parts = change_text.split('(')
+                if len(parts) == 2:
+                    change_value_str = parts[0].strip().replace(',', '')
+                    change_pct_str = parts[1].replace(')', '').replace('%', '').strip()
+                    
+                    change_value = float(change_value_str)
+                    change_pct = float(change_pct_str)
+                    
+                    # Determine previous close from current price and change
+                    prev_close = current_price - change_value
+                    
+                    return {
+                        'symbol': symbol,
+                        'price': round(current_price, 2),
+                        'change_pct': round(change_pct, 2),
+                        'prev_close': round(prev_close, 2),
+                        'timestamp': int(time.time()) # Current time as timestamp
+                        # Google Finance scraping typically doesn't provide high/low/open directly on the main quote page
+                    }
+            
+            # If change info not found, return just price
+            return {
+                'symbol': symbol,
+                'price': round(current_price, 2),
+                'timestamp': int(time.time())
+            }
+            
+        except requests.exceptions.RequestException as req_e:
+            print(f"Google Finance request error for {symbol}: {req_e}")
+            return None
+        except Exception as e:
+            print(f"Google Finance scraping error for {symbol}: {e}")
+            return None
+
+    def fetch_price(self, symbol: str) -> Optional[Dict]:
+        """
+        Fetch current price data.
+        Priority: Google Finance (Scrape) -> Finnhub -> Alpha Vantage -> Polygon
+        """
+        
+        # 0. Try Google Finance (Scraping) - Requested by User
+        # Note: scraping is slow but gets around API limits if careful.
+        gf_data = self.fetch_google_finance(symbol)
+        if gf_data:
+            return gf_data
+
+        # 1. Try Finnhub (Fastest API)
         data = self.fetch_from_finnhub(symbol)
         if data:
             return data
         
-        # Try Alpha Vantage (limited calls)
+        # 2. Try Alpha Vantage (limited calls)
         data = self.fetch_from_alpha_vantage(symbol)
         if data:
             return data

@@ -167,7 +167,7 @@ def analyze_stock(symbol: str, is_commodity=False, detailed=False):
         router = get_router()
         
         # Fetch from alternative APIs
-        api_data = router.fetch_stock(symbol)
+        api_data = router.fetch_price(symbol)
         
         if not api_data:
             print(f"No data available for {symbol}")
