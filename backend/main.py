@@ -227,12 +227,17 @@ def get_stock_analysis(symbol: str):
 @app.get("/api/opportunities")
 def get_opportunities():
     """Returns a list of buyable stocks."""
-    return {"opportunities": get_market_opportunities()}
+    global cache
+    # Use cached data if available (much faster!)
+    data_source = cache.get("quick_data") 
+    return {"opportunities": get_market_opportunities(cached_data=data_source)}
 
 @app.get("/api/insight")
 def get_insight():
     """Returns dynamic AI insight."""
-    opps = get_market_opportunities()
+    global cache
+    data_source = cache.get("quick_data")
+    opps = get_market_opportunities(cached_data=data_source)
     return {"insight": get_market_insight(opps)}
 
 from analysis import analyze_stock, get_market_opportunities, get_bulk_analysis, BIST_SYMBOLS, COMMODITIES_SYMBOLS, GLOBAL_SYMBOLS
@@ -386,7 +391,9 @@ def get_insight_alias():
 @app.get("/opportunities")
 def get_opportunities_alias():
     """Alias for /api/opportunities"""
-    opps = get_market_opportunities()
+    global cache
+    data_source = cache.get("quick_data")
+    opps = get_market_opportunities(cached_data=data_source)
     return {"opportunities": opps}  # Frontend expects {opportunities: [...]}
 
 

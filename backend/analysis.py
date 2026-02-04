@@ -68,7 +68,7 @@ GLOBAL_SYMBOLS = [
     
     # E-commerce & Payments
     "AMZN", "SHOP", "MELI", "EBAY", "ETSY", "SE", "BABA", "JD", "PDD",
-    "V", "MA", "PYPL", "SQ", "COIN", "SOFI",
+    "V", "MA", "PYPL", "COIN", "SOFI",
     
     # Telecom & Communication
     "T", "VZ", "TMUS", "CHTR",
@@ -324,29 +324,36 @@ def analyze_stock(symbol: str, is_commodity=False, detailed=False):
         return None
 
 
-def get_market_opportunities():
-    """Scans all symbols for buy signals."""
+def get_market_opportunities(cached_data=None):
+    """
+    Scans for buy signals.
+    If cached_data is provided (list of stock dicts), uses that for speed.
+    Otherwise, fetches fresh data (SLOW).
+    """
     opportunities = []
     
-    # Scan Stocks
-    for symbol in BIST_SYMBOLS:
-        data = analyze_stock(symbol, is_commodity=False)
-        # Use is_favorable (positive change) as buy signal for simplified data
-        if data and data.get('is_favorable', False) and data.get('change_pct', 0) > 0.5:
-            opportunities.append(data)
-
-    # Scan Global Stocks
-    for symbol in GLOBAL_SYMBOLS:
-        data = analyze_stock(symbol, is_commodity=False)
-        if data and data.get('is_favorable', False) and data.get('change_pct', 0) > 0.5:
-            opportunities.append(data)
-            
-    # Scan Commodities
-    for symbol in COMMODITIES_SYMBOLS.keys():
-        data = analyze_stock(symbol, is_commodity=True)
-        if data and data.get('is_favorable', False) and data.get('change_pct', 0) > 0.3:
-            opportunities.append(data)
+    source_data = cached_data
     
+    # If no cache, we MUST scan manually (this is what caused timeouts)
+    # We will try to scan a subset if no cache is provided to be safe
+    if not source_data:
+        # Fallback: Scan top 10 stocks only to avoid timeout
+        limit_scan = BIST_SYMBOLS[:5] + GLOBAL_SYMBOLS[:5]
+        for symbol in limit_scan:
+             data = analyze_stock(symbol, is_commodity=False)
+             if data: 
+                 opportunities.append(data)
+    else:
+        # Use Cached Data (Fast)
+        for stock in source_data:
+            # Check if it has favorable stats
+            # We already have the data calculated in the cache!
+            if stock.get('is_favorable', False) and stock.get('change_pct', 0) > 0.5:
+                # Add reason if missing (cache might not have full reason text if it was from quick view)
+                if not stock.get('reason'):
+                    stock['reason'] = stock.get('prediction', 'Positive Trend')
+                opportunities.append(stock)
+
     # Sort by change percentage (best performers first)
     opportunities.sort(key=lambda x: x.get('change_pct', 0), reverse=True)
     

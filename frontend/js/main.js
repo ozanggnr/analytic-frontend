@@ -27,11 +27,14 @@ async function init() {
     try {
         // Stage 1: Quick batch (100 stocks with multi-API fallback)
         await fetchQuickBatch();
-        loader.innerHTML = '<div class="loader-spinner"></div><p>✓ Data loaded!</p>';
-        setTimeout(() => loader.classList.add('hidden'), 1500);
+        loader.innerHTML = '<div class="loader-spinner"></div><p>✓ Fast data loaded!</p>';
 
-        // Data is now fully loaded
+        // Stage 2: Load the rest silently
+        fetchFullBatch();
 
+        setTimeout(() => loader.classList.add('hidden'), 1000);
+
+        // Data is now partially loaded
         loadAIInsight();
         loadOpportunities();
     } catch (error) {
@@ -39,6 +42,28 @@ async function init() {
         document.getElementById('stock-grid').innerHTML =
             '<p style="color: red; grid-column: 1/-1;">Failed to load market data. Please refresh or check if Railway backend is running.</p>';
         loader.classList.add('hidden');
+    }
+}
+
+// Stage 2: Fetch FULL batch (All stocks)
+async function fetchFullBatch() {
+    console.log("Fetching full market data...");
+    try {
+        const response = await fetch(`${API_URL}/api/market-data/full`);
+        if (!response.ok) throw new Error("Full batch failed");
+
+        const data = await response.json();
+
+        // Merge with existing
+        const fullList = data.stocks || [];
+        if (fullList.length > 0) {
+            sessionStorage.setItem('wolfee_market_data', JSON.stringify(data));
+            sessionStorage.setItem('wolfee_cache_time', Date.now().toString());
+            processData(data); // Re-render with full list
+            console.log(`✓ Full data loaded: ${fullList.length} stocks`);
+        }
+    } catch (e) {
+        console.warn("Full batch fetch failed, staying with quick data:", e);
     }
 }
 
