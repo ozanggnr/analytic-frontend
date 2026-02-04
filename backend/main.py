@@ -197,8 +197,10 @@ from analysis import analyze_stock, get_market_opportunities, get_bulk_analysis,
 
 @app.get("/api/history/{symbol}")
 def get_stock_history(symbol: str, period: str = "5y"):
-    """Returns closing prices for charts (1d, 1mo, 1y, 5y)."""
-    # Auto-append .IS only if it's not a common suffix, not a commodity, and not in global list
+    """Returns closing prices for charts using API router."""
+    from api_router import get_router
+    
+    # Auto-append .IS logic
     is_global = symbol in GLOBAL_SYMBOLS or symbol.upper() in GLOBAL_SYMBOLS
     is_commodity = "=" in symbol
     
@@ -206,56 +208,16 @@ def get_stock_history(symbol: str, period: str = "5y"):
         symbol += ".IS"
         
     try:
-        ticker = yf.Ticker(symbol)
+        router = get_router()
+        data = router.fetch_history(symbol, period)
         
-        # Determine interval based on period
-        interval = "1d"
-        if period == "1d":
-            interval = "15m" # Intraday for 1 day view
-        elif period == "1mo":
-            interval = "90m" # Granular enough for month
-            
-        hist = ticker.history(period=period, interval=interval)
-        
-        if hist.empty:
-             # Fallback if 1d fails (market closed etc), try 5d
-             if period == "1d":
-                 hist = ticker.history(period="5d", interval="60m")
-             if hist.empty:
-                raise HTTPException(status_code=404, detail="No history found")
-             
-        # Try to get full name (might be slow, so only do it here on demand)
-        full_name = symbol
-        try:
-            info = ticker.info
-            full_name = info.get('longName') or info.get('shortName') or symbol
-        except:
-            pass # Fallback to symbol if info fails
-
-        # Format for frontend
-        reset_hist = hist.reset_index()
-        data = []
-        for _, row in reset_hist.iterrows():
-            # Handle different index names (Datetime vs Date) depending on interval
-            date_val = row.get('Datetime') or row.get('Date')
-            
-            # Format: Include time if intraday
-            time_fmt = "%Y-%m-%d"
-            if period == "1d" or "m" in interval:
-                time_fmt = "%Y-%m-%d %H:%M"
-            
-            data.append({
-                "time": date_val.strftime(time_fmt),
-                "open": round(row['Open'], 2),
-                "high": round(row['High'], 2),
-                "low": round(row['Low'], 2),
-                "close": round(row['Close'], 2)
-            })
+        if not data:
+            raise HTTPException(status_code=404, detail="No history found via APIs")
             
         return {
             "symbol": symbol,
-            "name": full_name,
-            "history": data
+            "name": symbol, # Full name fetch not supported in router yet, use symbol
+            "history": data["history"]
         }
     except Exception as e:
         print(e)
@@ -266,42 +228,22 @@ def get_stock_history(symbol: str, period: str = "5y"):
 # Chart endpoint (frontend calls /api/chart/{symbol}/{period})
 @app.get("/api/chart/{symbol}/{period}")
 def get_chart_data_frontend(symbol: str, period: str):
-    """Chart data formatted for frontend Plotly"""
+    """Chart data using multi-API router (Finnhub/Polygon)"""
+    from api_router import get_router
+    
     try:
-        period_map = {
-            "1d": {"period": "1d", "interval": "1h"},
-            "1mo": {"period": "1mo", "interval": "1d"},
-            "1y": {"period": "1y", "interval": "1wk"},
-            "5y": {"period": "5y", "interval": "1wk"}
-        }
-        
-        params = period_map.get(period, {"period": "1y", "interval": "1wk"})
-        
         # Handle Turkish stocks
         if not symbol.endswith('.IS') and symbol not in GLOBAL_SYMBOLS and "=" not in symbol:
             symbol += '.IS'
-        
-        ticker = yf.Ticker(symbol)
-        hist = ticker.history(period=params["period"], interval=params["interval"])
-        
-        if hist.empty:
-            raise HTTPException(status_code=404, detail="No chart data")
-        
-        reset_hist = hist.reset_index()
-        data = []
-        for _, row in reset_hist.iterrows():
-            date_val = row.get('Datetime') or row.get('Date')
-            time_fmt = "%Y-%m-%d %H:%M" if period == "1d" else "%Y-%m-%d"
             
-            data.append({
-                "time": date_val.strftime(time_fmt),
-                "open": float(row['Open']),
-                "high": float(row['High']),
-                "low": float(row['Low']),
-                "close": float(row['Close'])
-            })
+        router = get_router()
+        data = router.fetch_history(symbol, period)
         
-        return {"symbol": symbol, "history": data}
+        if not data:
+            raise HTTPException(status_code=404, detail="No chart data available from APIs")
+            
+        return data  # Already formatted in api_router matches this structure
+        
     except Exception as e:
         print(f"Chart error for {symbol}: {e}")
         raise HTTPException(status_code=500, detail=str(e))

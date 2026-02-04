@@ -8,6 +8,8 @@ import os
 import requests
 from typing import Optional, Dict
 import time
+from datetime import datetime
+
 
 class StockAPIRouter:
     def __init__(self):
@@ -190,6 +192,124 @@ class StockAPIRouter:
         if data:
             return data
         
+        return None
+
+    def fetch_history(self, symbol: str, period: str = "1mo") -> Optional[Dict]:
+        """
+        Fetch historical candle data for charts.
+        Priority: Finnhub -> Polygon -> Alpha Vantage
+        """
+        # Convert period to timestamps (start/end)
+        end_ts = int(time.time())
+        start_ts = end_ts - (30 * 24 * 3600) # Default 1mo
+        resolution = "D"
+        
+        if period == "1d":
+            start_ts = end_ts - (24 * 3600)
+            resolution = "15" # 15 min
+        elif period == "1wk":
+            start_ts = end_ts - (7 * 24 * 3600)
+            resolution = "60"
+        elif period == "1mo":
+            start_ts = end_ts - (30 * 24 * 3600)
+            resolution = "D" 
+        elif period == "1y":
+            start_ts = end_ts - (365 * 24 * 3600)
+            resolution = "D" # Daily is best for 1y to avoid limits
+        elif period == "5y":
+            start_ts = end_ts - (5 * 365 * 24 * 3600)
+            resolution = "W" # Weekly
+            
+        # Try Finnhub (Best for candles)
+        if self.finnhub_key:
+            try:
+                self._rate_limit('finnhub')
+                clean_symbol = symbol.replace('.IS', '.IST')
+                
+                # Finnhub resolution mapping
+                # Supported: 1, 5, 15, 30, 60, D, W, M
+                fh_res = resolution
+                if resolution == "15": fh_res = "15"
+                if resolution == "60": fh_res = "60"
+                if resolution == "W": fh_res = "W"
+                
+                url = "https://finnhub.io/api/v1/stock/candle"
+                params = {
+                    'symbol': clean_symbol,
+                    'resolution': fh_res,
+                    'from': start_ts,
+                    'to': end_ts,
+                    'token': self.finnhub_key
+                }
+                
+                response = requests.get(url, params=params, timeout=10)
+                data = response.json()
+                
+                if data.get('s') == 'ok':
+                    # Convert to our format
+                    history = []
+                    times = data.get('t', [])
+                    opens = data.get('o', [])
+                    highs = data.get('h', [])
+                    lows = data.get('l', [])
+                    closes = data.get('c', [])
+                    
+                    for i in range(len(times)):
+                        ts = datetime.fromtimestamp(times[i])
+                        time_str = ts.strftime("%Y-%m-%d %H:%M") if "m" in period or period=="1d" else ts.strftime("%Y-%m-%d")
+                        history.append({
+                            "time": time_str,
+                            "open": opens[i],
+                            "high": highs[i],
+                            "low": lows[i],
+                            "close": closes[i]
+                        })
+                    return {"symbol": symbol, "history": history}
+                    
+            except Exception as e:
+                print(f"Finnhub history error: {e}")
+
+        # Try Polygon (US only)
+        if self.polygon_key and not symbol.endswith(".IS"):
+            try:
+                self._rate_limit('polygon')
+                multiplier = 1
+                timespan = "day"
+                
+                if period == "1d": 
+                    timespan = "minute"
+                    multiplier = 15
+                elif period == "1y":
+                    timespan = "day"
+                elif period == "5y":
+                    timespan = "week"
+                    
+                start_date = datetime.fromtimestamp(start_ts).strftime("%Y-%m-%d")
+                end_date = datetime.fromtimestamp(end_ts).strftime("%Y-%m-%d")
+                
+                url = f"https://api.polygon.io/v2/aggs/ticker/{symbol}/range/{multiplier}/{timespan}/{start_date}/{end_date}"
+                params = {'apiKey': self.polygon_key, 'limit': 500}
+                
+                response = requests.get(url, params=params, timeout=10)
+                data = response.json()
+                
+                if data.get('results'):
+                    history = []
+                    for bar in data['results']:
+                        ts = datetime.fromtimestamp(bar['t'] / 1000)
+                        time_str = ts.strftime("%Y-%m-%d %H:%M") if period=="1d" else ts.strftime("%Y-%m-%d")
+                        history.append({
+                            "time": time_str,
+                            "open": bar.get('o'),
+                            "high": bar.get('h'),
+                            "low": bar.get('l'),
+                            "close": bar.get('c')
+                        })
+                    return {"symbol": symbol, "history": history}
+                    
+            except Exception as e:
+                print(f"Polygon history error: {e}")
+
         return None
 
 
