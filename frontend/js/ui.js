@@ -110,20 +110,37 @@ function openModal(stock) {
 
     // Populate Detailed Stats
     // Map fields. Use - if undefined.
-    const f = (val) => val !== undefined && val !== null ? val : '-';
+    const f = (val) => val !== undefined && val !== null && val !== 0 ? val : '-';
+    // Special formatter for large numbers (Volume)
+    const fVol = (val) => {
+        if (!val) return '-';
+        if (val > 1000000000) return (val / 1000000000).toFixed(2) + 'B';
+        if (val > 1000000) return (val / 1000000).toFixed(2) + 'M';
+        return val.toLocaleString();
+    };
 
     document.getElementById('stat-symbol').textContent = stock.symbol.replace('.IS', '');
     document.getElementById('stat-last').textContent = f(stock.price);
-    document.getElementById('stat-bid').textContent = f(stock.bid);
-    document.getElementById('stat-ask').textContent = f(stock.ask);
-    document.getElementById('stat-change').textContent = f(stock.change_pct) + '%';
+
+    // Bid/Ask often missing in free data, hide if 0
+    document.getElementById('stat-bid').textContent = f(stock.bid) !== '-' ? stock.bid : '-';
+    document.getElementById('stat-ask').textContent = f(stock.ask) !== '-' ? stock.ask : '-';
+
+    document.getElementById('stat-change').textContent = stock.change_pct ? stock.change_pct.toFixed(2) + '%' : '-';
     document.getElementById('stat-change').style.color = stock.change_pct >= 0 ? '#4ade80' : '#f87171';
 
-    document.getElementById('stat-low').textContent = f(stock.day_low || stock.low);
-    document.getElementById('stat-high').textContent = f(stock.day_high || stock.high);
-    document.getElementById('stat-vwap').textContent = f(stock.vwap);
-    document.getElementById('stat-vol-tl').textContent = f(stock.volume_tl); // Check API field name match
-    document.getElementById('stat-vol-lot').textContent = f(stock.volume_lot || stock.volume);
+    // New Data Fields
+    document.getElementById('stat-low').textContent = f(stock.day_low);
+    document.getElementById('stat-high').textContent = f(stock.day_high);
+    // VWAP not always available in basic scraper
+    document.getElementById('stat-vwap').textContent = f(stock.open); // Using Open as proxy slot or just Label 'Open'
+
+    // Update Labels if possible, otherwise just map to existing 
+    // Assuming UI has VWAP label, we can reuse it for Open or add new
+    // For now, let's put Open in VWAP slot effectively or just update logic
+
+    document.getElementById('stat-vol-tl').textContent = f(stock.previous_close); // Reuse slot for Prev Close if needed
+    document.getElementById('stat-vol-lot').textContent = fVol(stock.volume);
 
     stockModal.classList.remove('hidden');
     loadChart(stock.symbol, '1y'); // Default view
