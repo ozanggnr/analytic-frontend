@@ -243,28 +243,32 @@ class StockAPIRouter:
                 }
                 
                 response = requests.get(url, params=params, timeout=10)
-                data = response.json()
-                
-                if data.get('s') == 'ok':
-                    # Convert to our format
-                    history = []
-                    times = data.get('t', [])
-                    opens = data.get('o', [])
-                    highs = data.get('h', [])
-                    lows = data.get('l', [])
-                    closes = data.get('c', [])
+                if response.status_code == 429:
+                     print(f"Finnhub History 429 for {symbol}")
+                     # Fallthrough
+                else:
+                    data = response.json()
                     
-                    for i in range(len(times)):
-                        ts = datetime.fromtimestamp(times[i])
-                        time_str = ts.strftime("%Y-%m-%d %H:%M") if "m" in period or period=="1d" else ts.strftime("%Y-%m-%d")
-                        history.append({
-                            "time": time_str,
-                            "open": opens[i],
-                            "high": highs[i],
-                            "low": lows[i],
-                            "close": closes[i]
-                        })
-                    return {"symbol": symbol, "history": history}
+                    if data.get('s') == 'ok':
+                        # Convert to our format
+                        history = []
+                        times = data.get('t', [])
+                        opens = data.get('o', [])
+                        highs = data.get('h', [])
+                        lows = data.get('l', [])
+                        closes = data.get('c', [])
+                        
+                        for i in range(len(times)):
+                            ts = datetime.fromtimestamp(times[i])
+                            time_str = ts.strftime("%Y-%m-%d %H:%M") if "m" in period or period=="1d" else ts.strftime("%Y-%m-%d")
+                            history.append({
+                                "time": time_str,
+                                "open": opens[i],
+                                "high": highs[i],
+                                "low": lows[i],
+                                "close": closes[i]
+                            })
+                        return {"symbol": symbol, "history": history}
                     
             except Exception as e:
                 print(f"Finnhub history error: {e}")
@@ -291,21 +295,26 @@ class StockAPIRouter:
                 params = {'apiKey': self.polygon_key, 'limit': 500}
                 
                 response = requests.get(url, params=params, timeout=10)
-                data = response.json()
                 
-                if data.get('results'):
-                    history = []
-                    for bar in data['results']:
-                        ts = datetime.fromtimestamp(bar['t'] / 1000)
-                        time_str = ts.strftime("%Y-%m-%d %H:%M") if period=="1d" else ts.strftime("%Y-%m-%d")
-                        history.append({
-                            "time": time_str,
-                            "open": bar.get('o'),
-                            "high": bar.get('h'),
-                            "low": bar.get('l'),
-                            "close": bar.get('c')
-                        })
-                    return {"symbol": symbol, "history": history}
+                if response.status_code == 429:
+                    print(f"Polygon History 429 for {symbol}")
+                    # Fallthrough
+                else:
+                    data = response.json()
+                    
+                    if data.get('results'):
+                        history = []
+                        for bar in data['results']:
+                            ts = datetime.fromtimestamp(bar['t'] / 1000)
+                            time_str = ts.strftime("%Y-%m-%d %H:%M") if period=="1d" else ts.strftime("%Y-%m-%d")
+                            history.append({
+                                "time": time_str,
+                                "open": bar.get('o'),
+                                "high": bar.get('h'),
+                                "low": bar.get('l'),
+                                "close": bar.get('c')
+                            })
+                        return {"symbol": symbol, "history": history}
                     
             except Exception as e:
                 print(f"Polygon history error: {e}")
