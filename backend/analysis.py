@@ -49,15 +49,15 @@ GLOBAL_SYMBOLS = [
     "VRTX", "REGN", "CI", "CVS", "HUM", "ELV", "HCA", "MOH",
     
     # Media & Entertainment
-    "DIS", "CMCSA", "NFLX", "PARA", "WBD", "FOXA", "SPOT", "RBLX", "EA", "TTWO", "ATVI",
+    "DIS", "CMCSA", "NFLX", "WBD", "FOXA", "SPOT", "RBLX", "EA", "TTWO",
     
     # Industrial & Manufacturing  
     "BA", "CAT", "GE", "HON", "UNP", "UPS", "FDX", "LMT", "RTX", "NOC", "GD", "MMM", "EMR",
     "ITW", "ETN", "PH", "ROK", "DOV",
     
     # Energy & Oil
-    "XOM", "CVX", "COP", "SLB", "EOG", "PXD", "MPC", "PSX", "VLO", "OXY", "HAL", "BKR",
-    "DVN", "FANG", "HES",
+    "XOM", "CVX", "COP", "SLB", "EOG", "MPC", "PSX", "VLO", "OXY", "HAL", "BKR",
+    "DVN", "FANG",
     
     # Automotive
     "TSLA", "F", "GM", "TM", "HMC", "STLA", "RIVN", "LCID",
