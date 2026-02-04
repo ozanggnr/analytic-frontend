@@ -1,15 +1,22 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from analysis import analyze_stock, get_market_opportunities, get_bulk_analysis, BIST_SYMBOLS, GLOBAL_SYMBOLS, COMMODITIES_SYMBOLS
 from ai_service import get_market_insight
 
 app = FastAPI(title="Wolfee Analytics")
 
-# Enable CORS for frontend (including file:// protocol for local testing)
+# Enable CORS for frontend
+origins = [
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+    "https://wolfee-backend.onrender.com",
+    "https://solitary-scene-04bc.ozanggnr.workers.dev" # User's Cloudflare Frontend
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins including file://
-    allow_credentials=False,  # Must be False when using allow_origins=["*"]
+    allow_origins=origins,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -36,67 +43,104 @@ def get_stocks():
 from datetime import datetime, timedelta
 import time
 
-# Two-tier cache: quick (100 stocks) and full (all stocks)
-quick_cache = {"data": None, "timestamp": None}
-full_cache = {"data": None, "timestamp": None}
+# Cache structure
+cache = {
+    "quick_data": [],
+    "last_updated": 0,
+    "is_updating": False
+}
+
+def update_cache_background():
+    """
+    Background task to fetch ALL stocks and update cache.
+    This runs after the response is returned to the user.
+    """
+    global cache
+    if cache["is_updating"]:
+        print("Cache update already in progress...")
+        return
+
+    print("🔄 Starting background cache update...")
+    cache["is_updating"] = True
+    
+    try:
+        results = []
+        # Fetch all symbols
+        all_symbols = BIST_SYMBOLS + GLOBAL_SYMBOLS
+        total = len(all_symbols)
+        
+        for i, symbol in enumerate(all_symbols):
+            try:
+                # Reuse existing analyze_stock logic (now uses Google Finance Scraper)
+                stock_data = analyze_stock(symbol, is_commodity=False)
+                if stock_data:
+                    results.append(stock_data)
+                
+                # Small delay to be nice to CPUs
+                time.sleep(0.5) 
+                
+            except Exception as e:
+                print(f"Background fetch error {symbol}: {e}")
+
+        # Commodities
+        for symbol in COMMODITIES_SYMBOLS:
+             c_data = analyze_stock(symbol, is_commodity=True)
+             if c_data:
+                 results.append(c_data)
+
+        # Update cache
+        cache["quick_data"] = results
+        cache["last_updated"] = time.time()
+        print(f"✅ Background cache update complete. {len(results)} stocks cached.")
+        
+    except Exception as e:
+        print(f"Background update failed: {e}")
+    finally:
+        cache["is_updating"] = False
 
 @app.get("/api/market-data/quick")
-def get_quick_market_data():
+def get_quick_market_data(background_tasks: BackgroundTasks):
     """
-    Fetch stocks with resilient error handling.
-    Only returns successfully loaded stocks.
+    Fetch stocks with timeout protection.
+    1. Returns Cached data if available (< 5 mins old).
+    2. If no cache, fetches TOP 10 stocks synchronously (fast).
+    3. Triggers Background Task to fetch the rest.
     """
-    global quick_cache
+    global cache
     now = time.time()
     
-    # Check cache (5 min)
-    if quick_cache["data"] and quick_cache["timestamp"] and (now - quick_cache["timestamp"]) < 300:
-        print(f"✓ Returning cached data ({len(quick_cache['data'])} stocks)")
-        return {"stocks": quick_cache["data"]}
+    # 1. Return Cache if valid (5 min TTL)
+    if cache["quick_data"] and (now - cache["last_updated"]) < 300:
+        print(f"✓ Returning cached data ({len(cache['quick_data'])} stocks)")
+        return {"stocks": cache["quick_data"]}
     
-    print("🚀 Fetching market data (resilient mode)...")
+    # 2. Fetch Top 10 Sync (Fast boot)
+    print("🚀 Cache empty/stale. Fetching Top 10...")
+    
+    # Select important stocks for initial view
+    # 3 BIST, 3 Global, 2 Commodity
+    initial_symbols = BIST_SYMBOLS[:3] + GLOBAL_SYMBOLS[:3] 
+    
     results = []
     
-    # Phase 1: Turkish stocks (~50 stocks)
-    print(f"📊 Phase 1: Fetching {len(BIST_SYMBOLS)} Turkish stocks...")
-    for symbol in BIST_SYMBOLS:
-        try:
-            data = analyze_stock(symbol, is_commodity=False)
-            if data:  # Only add if successful
-                results.append(data)
-        except Exception as e:
-            print(f"Error analyzing {symbol}: {e}")
+    for symbol in initial_symbols:
+        data = analyze_stock(symbol) # Now uses optimized api_router
+        if data:
+            results.append(data)
     
-    print(f"✓ Turkish stocks loaded: {len(results)}")
+    # Add commodities for dashboard
+    for symbol in list(COMMODITIES_SYMBOLS.keys())[:2]:
+         data = analyze_stock(symbol, is_commodity=True)
+         if data:
+             results.append(data)
+             
+    # 3. Trigger Full Update in Background
+    background_tasks.add_task(update_cache_background)
     
-    # Phase 2: Global stocks (~100 stocks for quick load)
-    global_quick = GLOBAL_SYMBOLS[:100]  # First 100 for speed
-    print(f"🌍 Phase 2: Fetching {len(global_quick)} Global stocks...")
+    # Update cache partially so subsequent immediate requests get something
+    if not cache["quick_data"]:
+        cache["quick_data"] = results
     
-    for symbol in global_quick:
-        try:
-            data = analyze_stock(symbol, is_commodity=False)
-            if data:  # Only add if successful
-                results.append(data)
-        except Exception as e:
-            print(f"Error analyzing {symbol}: {e}")
-    
-    print(f"✓ Global stocks loaded: {len(results) - len([r for r in results if r['symbol'].endswith('.IS') ])}") 
-    
-    # Phase 3: Commodities
-    print(f"💰 Phase 3: Fetching {len(COMMODITIES_SYMBOLS.keys())} Commodity ETFs...")
-    for symbol in COMMODITIES_SYMBOLS.keys():
-        try:
-            data = analyze_stock(symbol, is_commodity=True)
-            if data:  # Only add if successful
-                results.append(data)
-        except Exception as e:
-            print(f"Error analyzing {symbol}: {e}")
-    
-    quick_cache["data"] = results
-    quick_cache["timestamp"] = now
-    
-    print(f"🎉 Complete: {len(results)} stocks loaded successfully")
     return {"stocks": results}
 
 @app.get("/api/market-data/full")
