@@ -16,27 +16,36 @@ class StockAPIRouter:
     def __init__(self):
         # API Keys from environment
         self.finnhub_key = os.getenv('FINNHUB_API_KEY')
-        self.alphavantage_key = os.getenv('ALPHA_VANTAGE_API_KEY') # Renamed from alpha_vantage_key
+        self.alphavantage_key = os.getenv('ALPHA_VANTAGE_API_KEY')
         self.polygon_key = os.getenv('POLYGON_API_KEY')
-        # Alpaca keys removed as per instruction
         
-        # Rate limiting (simple counter)
+        # Rate limiting dictionary
         self.last_call = {}
-        self.min_interval = 1.0  # 1 second between calls
+        # Finnhub limit is 60/min. 1.2s interval = 50/min (Safe). 
+        # Polygon free is 5/min. If we hit fallback, we MUST wait.
+        self.min_interval = 1.3  
         
     def _rate_limit(self, api_name: str):
-        """Simple rate limiting"""
+        """Strict rate limiting with sleep"""
         now = time.time()
         if api_name in self.last_call:
             elapsed = now - self.last_call[api_name]
             if elapsed < self.min_interval:
                 time.sleep(self.min_interval - elapsed)
         self.last_call[api_name] = time.time()
-    
+
+    def _handle_api_error(self, e, api_name: str):
+        """Handle 429 and other errors"""
+        if isinstance(e, requests.exceptions.HTTPError):
+            if e.response.status_code == 429:
+                print(f"⚠️ {api_name} Rate Limit Hit (429). Cooling down for 60s...")
+                time.sleep(60) # Wait for limit reset
+                return True
+        return False
+
     def fetch_from_finnhub(self, symbol: str) -> Optional[Dict]:
         """
         Fetch stock data from Finnhub (60 calls/min free tier)
-        Best for: Real-time quotes for US and global stocks
         """
         if not self.finnhub_key:
             return None
@@ -45,18 +54,21 @@ class StockAPIRouter:
             self._rate_limit('finnhub')
             
             # Remove .IS suffix for Turkish stocks - Finnhub uses different format
-            clean_symbol = symbol.replace('.IS', '.IST')  # Istanbul exchange
+            # But we skip Finnhub for .IS usually unless BIST scraper fails? 
+            # BIST scraper logic is separate now.
+            clean_symbol = symbol.replace('.IS', '.IST') 
             
             # Get quote
             url = f"https://finnhub.io/api/v1/quote"
             params = {'symbol': clean_symbol, 'token': self.finnhub_key}
             
-            response = requests.get(url, params=params, timeout=5)
+            response = requests.get(url, params=params, timeout=10) # 10s timeout
             response.raise_for_status()
             data = response.json()
             
             if data.get('c') == 0:  # No data
                 return None
+
                 
             # Calculate change percentage
             current_price = data.get('c', 0)
