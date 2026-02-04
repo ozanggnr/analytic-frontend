@@ -193,26 +193,49 @@ class StockAPIRouter:
         # 1. Try yfinance library
         try:
             import yfinance as yf
-            # yfinance handles symbols like 'AAPL', 'AKBNK.IS'
             ticker = yf.Ticker(symbol)
-            # fast_info is faster than history()
+            
+            # fast_info is reliable for price/vol
             info = ticker.fast_info
             
-            # Check valid price
             price = info.last_price
             prev_close = info.previous_close
             
+            # Validation for BIST stocks (prevent index scraping bugs)
+            if symbol.endswith('.IS') and (price is None or price > 20000):
+                 # 49k bug protection
+                 raise ValueError("Suspicious price for BIST stock")
+
             if price is not None and price > 0:
                 change_pct = ((price - prev_close) / prev_close) * 100 if prev_close else 0
                 
+                # Try to get Name (might be slow, use cache later?)
+                # metadata often has shortName
+                name = symbol
+                try:
+                    # Accessing 'info' triggers a separate request, can be slow/blocked
+                    # Try accessing partial dict if possible or just use symbol for now to be fast
+                    # But user requested Name.
+                    # Let's try to get it safely.
+                    full_info = ticker.info # This is the risky part
+                    name = full_info.get('shortName') or full_info.get('longName') or symbol
+                except:
+                    pass
+
                 return {
                     "symbol": symbol,
+                    "name": name,
                     "price": round(price, 2),
                     "change_pct": round(change_pct, 2),
-                    "volume": 0 # Optimization
+                    "volume": int(info.last_volume) if info.last_volume else 0,
+                    "high": round(info.day_high, 2) if info.day_high else 0,
+                    "low": round(info.day_low, 2) if info.day_low else 0,
+                    "open": round(info.open, 2) if info.open else 0,
+                    "source": "yfinance"
                 }
-        except Exception:
-            pass # Try backup
+        except Exception as e:
+            # print(f"yfinance failed for {symbol}: {e}")
+            pass 
 
         # 2. Backup: Google Finance (Global + Turkish)
         gf_symbol = symbol
@@ -231,19 +254,27 @@ class StockAPIRouter:
                 price_div = soup.find('div', class_='YMlKec fxKbKc')
                 if not price_div: price_div = soup.find('div', class_='YMlKec')
                 
+                name_div = soup.find('div', class_='zzDege')
+                name = name_div.text.strip() if name_div else symbol
+                
                 if price_div:
                     p_text = price_div.get_text().replace('₺', '').replace('$', '').replace(',', '').strip()
                     price = float(p_text)
                     
-                    # Sanity check for BIST index confusion (avoid 49k if not index)
-                    # If it's TR stock and price > 15000, probably index. (Except occasional outliers?)
-                    if not (symbol.endswith('.IS') and price > 15000):
-                        return {
-                            "symbol": symbol,
-                            "price": price,
-                            "change_pct": 0.0,
-                            "volume": 0
-                        }
+                    # STRICT Sanity check for BIST
+                    # If it's TR stock and price > 15000, it's an index or bug.
+                    if symbol.endswith('.IS') and price > 15000:
+                        return None
+                        
+                    return {
+                        "symbol": symbol,
+                        "name": name,
+                        "price": price,
+                        "change_pct": 0.0, # Basic scraper limitation
+                        "volume": 0,
+                        "high": 0, "low": 0, "open": 0,
+                        "source": "google_scrape"
+                    }
         except Exception:
             pass
             
