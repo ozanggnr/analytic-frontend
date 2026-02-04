@@ -57,32 +57,9 @@ async function fetchQuickBatch() {
         }
 
         const data = await response.json();
-
-        // If backend returned 0 stocks, use mock data
-        if (!data.stocks || data.stocks.length === 0) {
-            console.warn('⚠️ Backend returned 0 stocks (Yahoo Finance IP blocked)');
-            console.warn('📊 Using MOCK data for local testing...');
-            const mockData = window.generateMockStocks ? window.generateMockStocks() : [];
-            const fallbackData = {
-                stocks: mockData,
-                timestamp: new Date().toISOString(),
-                source: 'mock'
-            };
-            sessionStorage.setItem('wolfee_market_data', JSON.stringify(fallbackData));
-            sessionStorage.setItem('wolfee_cache_time', Date.now().toString());
-            processData(fallbackData);
-            console.log(`✓ Mock data loaded: ${mockData.length} stocks`);
-            return;
-        }
-
-        // Backend has data, use it
+        // Mock data removed as per user request
+        // function loadMockData() { ... }
         sessionStorage.setItem('wolfee_market_data', JSON.stringify(data));
-        sessionStorage.setItem('wolfee_cache_time', Date.now().toString());
-        processData(data);
-        console.log(`✓ Backend loaded: ${data.stocks.length} stocks`);
-    } catch (error) {
-        console.warn("⚠️ Backend fetch failed, using MOCK data for local testing:", error);
-        // Yahoo Finance blocks CORS from ALL origins (including localhost)
         // Use mock data for local testing
         const mockData = window.generateMockStocks ? window.generateMockStocks() : [];
         const fallbackData = {
