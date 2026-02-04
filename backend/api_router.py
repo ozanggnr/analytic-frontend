@@ -79,6 +79,9 @@ class StockAPIRouter:
                 'low': data.get('l', current_price),
                 'open': data.get('o', current_price),
                 'prev_close': prev_close,
+                'previous_close': prev_close,
+                'day_high': data.get('h', current_price),
+                'day_low': data.get('l', current_price),
                 'timestamp': data.get('t', int(time.time()))
             }
             
