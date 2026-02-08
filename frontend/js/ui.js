@@ -146,6 +146,7 @@ function openModal(stock) {
     loadChart(stock.symbol, '1y'); // Default view
 
     updatePortfolioButtonUI();
+    document.body.classList.add('no-scroll');
 }
 
 function updatePortfolioButtonUI() {
@@ -207,7 +208,13 @@ function closeExportModal() { exportModal.classList.add('hidden'); }
 window.addEventListener('click', (e) => {
     if (e.target == exportModal) closeExportModal();
     const stockModal = document.getElementById('stock-modal');
-    if (e.target == stockModal) stockModal.classList.add('hidden');
+    if (e.target == stockModal) {
+        stockModal.classList.add('hidden');
+        document.body.classList.remove('no-scroll');
+    }
 });
 const stockCloseBtn = document.querySelector('#stock-modal .close-modal');
-if (stockCloseBtn) stockCloseBtn.onclick = () => document.getElementById('stock-modal').classList.add('hidden');
+if (stockCloseBtn) stockCloseBtn.onclick = () => {
+    document.getElementById('stock-modal').classList.add('hidden');
+    document.body.classList.remove('no-scroll');
+};

@@ -710,25 +710,40 @@ aside {
 
 @media (max-width: 600px) {
     .close-modal {
-        top: 0.5rem;
-        right: 0.5rem;
-        background: rgba(0, 0, 0, 0.5); /* Add background for better visibility */
+        top: 1rem;
+        right: 1rem;
+        background: rgba(0, 0, 0, 0.6);
         border-radius: 50%;
-        width: 30px;
-        height: 30px;
+        width: 36px;
+        height: 36px;
         display: flex;
         align-items: center;
         justify-content: center;
         font-size: 1.5rem;
+        z-index: 50;
+        /* Ensure on top */
+    }
+
+    .modal-content {
+        margin-top: 10vh;
+        /* Push down significantly */
+        max-height: 85vh;
+        /* Limit height to allow scrolling inside */
+        overflow-y: auto;
+        /* Enable internal scrolling */
+        padding-top: 3rem;
+        /* Extra padding for close button area */
     }
 }
 
 /* Modal Header adjustment to avoid overlap */
 #stock-modal .modal-content h2 {
-    margin-right: 40px;
-    /* Space for close button */
+    margin-right: 0;
+    /* Reset for flex handling */
     font-size: 1.5rem;
     margin-bottom: 0.5rem;
+    padding-right: 40px;
+    /* Space for X */
 }
 
 /* Container for Title and Portfolio Button */
@@ -739,7 +754,8 @@ aside {
     align-items: center;
     gap: 1rem;
     margin-bottom: 1rem;
-    padding-right: 50px; /* Increased padding to avoid overlap with close button */
+    padding-right: 50px;
+    /* Increased padding to avoid overlap with close button */
     /* Ensure non-overlap with X */
 }
 
